@@ -48,7 +48,7 @@ async function seriesUpsert(env, slug, entry) {
 
 function seriesPage(origin, slug, list) {
   const rows = [...list].reverse().map((e, i) =>
-    `<a href="${origin}/share/${e.id}?series=${slug}"><b>round ${e.round}</b> · ${e.title || ""}${i === 0 ? ' <span class="cur">latest</span>' : ""}<span class="ts">${(e.ts || "").slice(0, 10)}</span></a>`,
+    `<a href="${origin}/share/${e.id}?series=${slug}"><b>round ${e.round}</b> · ${e.title || ""}${e.by ? ` <span class="by">by ${e.by}</span>` : ""}${i === 0 ? ' <span class="cur">latest</span>' : ""}<span class="ts">${(e.ts || "").slice(0, 10)}</span></a>`,
   ).join("");
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${slug} · rounds</title>
@@ -56,7 +56,8 @@ function seriesPage(origin, slug, list) {
 h1{font-size:22px}h1 span{color:#B4532A;font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:.12em;display:block}
 a{display:flex;gap:10px;align-items:baseline;padding:13px 16px;margin:8px 0;background:#FCF8F1;border:1px solid #E2D8C8;border-radius:9px;color:inherit;text-decoration:none}
 a:hover{border-color:#191713}.ts{margin-left:auto;color:#7A7166;font-size:12.5px;font-variant-numeric:tabular-nums}
-.cur{background:#2E7D4F;color:#fff;border-radius:99px;font-size:11px;padding:1px 8px}</style>
+.cur{background:#2E7D4F;color:#fff;border-radius:99px;font-size:11px;padding:1px 8px}
+.by{color:#B4532A;font-size:12.5px}</style>
 <h1><span>brand-studio · series</span>${slug}</h1>${rows || "<p>还没有任何 round。</p>"}`;
 }
 
@@ -93,7 +94,7 @@ function topbar(origin, slug, list, curId) {
 ${glyph}
 <button class="bs-t" id="bs-tbtn">${slug} · round ${cur.round || "?"}${cur.title ? " · " + cur.title : ""}
 <svg class="bs-ch" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3 L5 7 L9 3" stroke="#191713" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
-<span class="bs-by">Board · brand-studio</span>
+<span class="bs-by">Board${cur.by ? " by " + cur.by : " · brand-studio"}</span>
 <button class="bs-share" id="bs-shr">Share</button>
 <div id="bs-pop"><h4>Round history</h4>${items}<a class="bs-all" href="${origin}/s/${slug}">全部 rounds →</a></div>
 <script>
@@ -154,6 +155,7 @@ export default {
         await seriesUpsert(env, series, {
           round: url.searchParams.get("round") || "1",
           title: url.searchParams.get("title") || "",
+          by: (url.searchParams.get("by") || "").slice(0, 40),
           id: newId,
           ts: new Date().toISOString(),
         });

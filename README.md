@@ -19,7 +19,7 @@ an idle share dies after one day. Republish (same content → same id) to revive
 
 | Method + path | Purpose |
 | --- | --- |
-| `POST /share` (body = self-contained HTML, ≤4MB) | Publish a board → `{id, url}`. Content-derived id, idempotent. |
+| `POST /share[?series=&round=&title=&by=]` (body = self-contained HTML, ≤4MB) | Publish a board → `{id, url}`. Content-derived id, idempotent. `series/round/title` register it in a series (round switcher + `/s/<slug>` picker); `by` is the publisher's everyday name, shown in the injected topbar ("Board by jackson") and the series page. |
 | `GET /share/<id>` | Serve the board (re-arms TTL). `410` when expired. |
 | `POST /share/<id>/verdict` (`{name, decisions[], next?}`) | One reviewer's submission; keyed by name, resubmit overwrites. |
 | `GET /share/<id>/verdicts` | Merged submissions, agent-readable: `{id, count, submissions[]}`. |
