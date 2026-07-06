@@ -32,12 +32,53 @@ async function touch(env, key, value) {
   await env.SHARES.put(key, value, { expirationTtl: TTL });
 }
 
+// Series index: `x:<slug>` holds [{round, title, id, ts}] so a whole review
+// series lives behind one stable URL with switchable rounds (artifact
+// version-history style).
+async function seriesUpsert(env, slug, entry) {
+  const raw = await env.SHARES.get(`x:${slug}`);
+  const list = raw ? JSON.parse(raw) : [];
+  const i = list.findIndex((e) => String(e.round) === String(entry.round));
+  if (i >= 0) list[i] = entry;
+  else list.push(entry);
+  list.sort((a, b) => Number(a.round) - Number(b.round));
+  await touch(env, `x:${slug}`, JSON.stringify(list));
+  return list;
+}
+
+function seriesPage(origin, slug, list) {
+  const rows = [...list].reverse().map((e, i) =>
+    `<a href="${origin}/share/${e.id}?series=${slug}"><b>round ${e.round}</b> · ${e.title || ""}${i === 0 ? ' <span class="cur">latest</span>' : ""}<span class="ts">${(e.ts || "").slice(0, 10)}</span></a>`,
+  ).join("");
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${slug} · rounds</title>
+<style>body{font:15px/1.6 -apple-system,"PingFang SC",sans-serif;background:#F3EDE3;color:#191713;max-width:560px;margin:8vh auto;padding:0 20px}
+h1{font-size:22px}h1 span{color:#B4532A;font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:.12em;display:block}
+a{display:flex;gap:10px;align-items:baseline;padding:13px 16px;margin:8px 0;background:#FCF8F1;border:1px solid #E2D8C8;border-radius:9px;color:inherit;text-decoration:none}
+a:hover{border-color:#191713}.ts{margin-left:auto;color:#7A7166;font-size:12.5px;font-variant-numeric:tabular-nums}
+.cur{background:#2E7D4F;color:#fff;border-radius:99px;font-size:11px;padding:1px 8px}</style>
+<h1><span>brand-studio · series</span>${slug}</h1>${rows || "<p>还没有任何 round。</p>"}`;
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-    const m = url.pathname.match(/^\/share(?:\/([0-9a-f]{16}))?(?:\/(verdicts?))?$/);
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
+    // Series routes: GET /s/<slug> (round picker page), GET /s/<slug>/index.json
+    const sm = url.pathname.match(/^\/s\/([\w-]{1,64})(\/index\.json)?$/);
+    if (sm && req.method === "GET") {
+      const [, slug, wantJson] = sm;
+      const raw = await env.SHARES.get(`x:${slug}`);
+      const list = raw ? JSON.parse(raw) : [];
+      if (raw) await touch(env, `x:${slug}`, raw);
+      if (wantJson) return json({ series: slug, rounds: list });
+      return new Response(seriesPage(url.origin, slug, list), {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
+
+    const m = url.pathname.match(/^\/share(?:\/([0-9a-f]{16}))?(?:\/(verdicts?))?$/);
     if (!m) {
       return new Response("brand-studio share server. POST /share -> {url}", {
         headers: { "Content-Type": "text/plain; charset=utf-8", ...CORS },
@@ -45,13 +86,24 @@ export default {
     }
     const [, id, tail] = m;
 
-    // POST /share — publish a self-contained board HTML, get a link back.
+    // POST /share[?series=<slug>&round=<n>&title=<t>] — publish a board.
     if (!id && req.method === "POST") {
       const html = await req.text();
       if (!html || html.length > 4_000_000) return json({ error: "empty or >4MB" }, 400);
       const newId = fnv1a(html); // content-derived => idempotent republish
       await touch(env, `s:${newId}`, html);
-      return json({ id: newId, url: `${url.origin}/share/${newId}` });
+      const series = (url.searchParams.get("series") || "").match(/^[\w-]{1,64}$/)?.[0];
+      let shareUrl = `${url.origin}/share/${newId}`;
+      if (series) {
+        await seriesUpsert(env, series, {
+          round: url.searchParams.get("round") || "1",
+          title: url.searchParams.get("title") || "",
+          id: newId,
+          ts: new Date().toISOString(),
+        });
+        shareUrl += `?series=${series}`;
+      }
+      return json({ id: newId, url: shareUrl, series: series || null });
     }
     if (!id) return json({ error: "not found" }, 404);
 
