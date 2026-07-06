@@ -1,0 +1,11 @@
+name = "brand-studio-share"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+routes = [
+  { pattern = "brand-studio.sma1lboy.me", custom_domain = true },
+]
+
+[[kv_namespaces]]
+binding = "SHARES"
+id = "966ff12b8c5b4685b1b4742298c806e2"
