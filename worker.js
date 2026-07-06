@@ -58,7 +58,7 @@ a{display:flex;gap:10px;align-items:baseline;padding:13px 16px;margin:8px 0;back
 a:hover{border-color:#191713}.ts{margin-left:auto;color:#7A7166;font-size:12.5px;font-variant-numeric:tabular-nums}
 .cur{background:#2E7D4F;color:#fff;border-radius:99px;font-size:11px;padding:1px 8px}
 .by{color:#B4532A;font-size:12.5px}</style>
-<h1><span>brand-studio · series</span>${slug}</h1>${rows || "<p>还没有任何 round。</p>"}`;
+<h1 style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 120 120" width="34" height="34" aria-hidden="true"><path fill-rule="evenodd" fill="#191713" d="M60 12 L102 36 V84 L60 108 L18 84 V36 Z M42 68 L37 42 L52 53 H68 L83 42 L78 68 L60 90 Z"/></svg><span style="display:block"><span>brand-studio · series</span>${slug}</span></h1>${rows || "<p>还没有任何 round。</p>"}`;
 }
 
 // Outer chrome injected above a board (claude.ai-artifact style): org glyph,
@@ -70,7 +70,7 @@ function topbar(origin, slug, list, curId) {
     `<b>round ${e.round}</b><span>${e.title || ""}</span>` +
     `${e.id === curId ? "<em>Current</em>" : ""}<time>${(e.ts || "").slice(0, 10)}</time></a>`,
   ).join("");
-  const glyph = `<svg viewBox="0 0 120 120" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" fill="#191713" stroke="#191713" stroke-width="10" stroke-linejoin="round" d="M60 15 L99 37 V83 L60 105 L21 83 V37 Z M40 66 Q37 46 35 39 L52 49 L68 49 L85 39 Q83 46 80 66 L60 89 Z"/></svg>`;
+  const glyph = `<svg viewBox="0 0 120 120" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" fill="#191713" d="M60 12 L102 36 V84 L60 108 L18 84 V36 Z M42 68 L37 42 L52 53 H68 L83 42 L78 68 L60 90 Z"/></svg>`;
   return `<div id="bs-top">
 <style>
 #bs-top{position:fixed;top:0;left:0;right:0;height:48px;z-index:99;background:#FCF8F1;border-bottom:1px solid #E2D8C8;display:flex;align-items:center;gap:12px;padding:0 14px;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;color:#191713}
