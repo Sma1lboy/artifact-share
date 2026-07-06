@@ -60,6 +60,62 @@ a:hover{border-color:#191713}.ts{margin-left:auto;color:#7A7166;font-size:12.5px
 <h1><span>brand-studio · series</span>${slug}</h1>${rows || "<p>还没有任何 round。</p>"}`;
 }
 
+// Outer chrome injected above a board (claude.ai-artifact style): org glyph,
+// round-history dropdown, share button. Pure prepend — board HTML untouched.
+function topbar(origin, slug, list, curId) {
+  const cur = list.find((e) => e.id === curId) || {};
+  const items = [...list].reverse().map((e) =>
+    `<a class="bs-it${e.id === curId ? " bs-on" : ""}" href="${origin}/share/${e.id}?series=${slug}">` +
+    `<b>round ${e.round}</b><span>${e.title || ""}</span>` +
+    `${e.id === curId ? "<em>Current</em>" : ""}<time>${(e.ts || "").slice(0, 10)}</time></a>`,
+  ).join("");
+  const glyph = `<svg viewBox="0 0 120 120" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" fill="#191713" stroke="#191713" stroke-width="10" stroke-linejoin="round" d="M60 15 L99 37 V83 L60 105 L21 83 V37 Z M40 66 Q37 46 35 39 L52 49 L68 49 L85 39 Q83 46 80 66 L60 89 Z"/></svg>`;
+  return `<div id="bs-top">
+<style>
+#bs-top{position:fixed;top:0;left:0;right:0;height:48px;z-index:99;background:#FCF8F1;border-bottom:1px solid #E2D8C8;display:flex;align-items:center;gap:12px;padding:0 14px;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;color:#191713}
+#bs-top .bs-t{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:none;background:transparent;font:inherit;font-weight:700;cursor:pointer}
+#bs-top .bs-t:hover{background:#F0E8DA}
+#bs-top .bs-t svg.bs-ch{opacity:.55}
+#bs-top .bs-by{color:#7A7166}
+#bs-top .bs-share{margin-left:auto;font:inherit;font-weight:600;padding:6px 16px;border-radius:8px;border:1px solid #191713;background:transparent;cursor:pointer}
+#bs-top .bs-share:hover{background:#191713;color:#FCF8F1}
+#bs-pop{position:fixed;top:52px;left:14px;z-index:99;background:#fff;border:1px solid #E2D8C8;border-radius:12px;box-shadow:0 12px 32px rgba(25,23,19,.14);min-width:320px;padding:6px;display:none}
+#bs-pop h4{margin:6px 10px;font-size:12px;color:#7A7166;font-weight:600}
+#bs-pop .bs-it{display:flex;gap:8px;align-items:baseline;padding:9px 10px;border-radius:8px;color:inherit;text-decoration:none}
+#bs-pop .bs-it:hover{background:#F5EFE4}
+#bs-pop .bs-it.bs-on{background:#F0E8DA}
+#bs-pop .bs-it span{color:#7A7166;font-size:12.5px}
+#bs-pop .bs-it em{font-style:normal;color:#2E7D4F;font-size:11.5px;font-weight:700}
+#bs-pop .bs-it time{margin-left:auto;color:#A79C8D;font-size:11.5px;font-variant-numeric:tabular-nums}
+#bs-pop .bs-all{display:block;padding:9px 10px;border-top:1px solid #EEE5D6;margin-top:4px;color:#B4532A;text-decoration:none;font-weight:600;border-radius:8px}
+#bs-pop .bs-all:hover{background:#F5EFE4}
+</style>
+${glyph}
+<button class="bs-t" id="bs-tbtn">${slug} · round ${cur.round || "?"}${cur.title ? " · " + cur.title : ""}
+<svg class="bs-ch" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3 L5 7 L9 3" stroke="#191713" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+<span class="bs-by">Board · brand-studio</span>
+<button class="bs-share" id="bs-shr">Share</button>
+<div id="bs-pop"><h4>Round history</h4>${items}<a class="bs-all" href="${origin}/s/${slug}">全部 rounds →</a></div>
+<script>
+(function(){
+  document.body.style.paddingTop = "48px";
+  document.addEventListener("DOMContentLoaded", function(){
+    var nav = document.getElementById("roundNav"); if (nav) nav.style.display = "none";
+  });
+  var pop = document.getElementById("bs-pop"), btn = document.getElementById("bs-tbtn");
+  btn.addEventListener("click", function(e){ e.stopPropagation(); pop.style.display = pop.style.display === "block" ? "none" : "block"; });
+  document.addEventListener("click", function(){ pop.style.display = "none"; });
+  document.getElementById("bs-shr").addEventListener("click", function(){
+    var u = location.href;
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(
+      function(){ var b=document.getElementById("bs-shr"); b.textContent="已复制 ✓"; setTimeout(function(){ b.textContent="Share"; }, 1600); },
+      function(){ prompt("复制链接:", u); });
+  });
+})();
+</script>
+</div>`;
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -139,7 +195,9 @@ export default {
       return json({ id, count: submissions.length, submissions });
     }
 
-    // GET /share/:id — serve the board, re-arm its TTL.
+    // GET /share/:id — serve the board, re-arm its TTL. With ?series= the
+    // server injects an outer chrome topbar (round history dropdown, share),
+    // so every board — old or new — gets it without touching stored HTML.
     if (!tail && req.method === "GET") {
       const html = await env.SHARES.get(`s:${id}`);
       if (html === null) {
@@ -149,7 +207,14 @@ export default {
         });
       }
       await touch(env, `s:${id}`, html);
-      return new Response(html, {
+      let body = html;
+      const series = (url.searchParams.get("series") || "").match(/^[\w-]{1,64}$/)?.[0];
+      if (series) {
+        const raw = await env.SHARES.get(`x:${series}`);
+        const list = raw ? JSON.parse(raw) : [];
+        if (list.length) body = topbar(url.origin, series, list, id) + html;
+      }
+      return new Response(body, {
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
       });
     }
