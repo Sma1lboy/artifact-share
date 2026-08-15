@@ -173,6 +173,20 @@ fetch(location.pathname + "/verdicts")            // aggregate
 round-review board wired to exactly this transport, and consumes this repo as a
 submodule.
 
+## Maintainer note
+
+`share.sma1lboy.me` deploys from `wrangler.production.toml`, which pins the real
+KV namespace and the custom domain:
+
+```bash
+bunx wrangler deploy -c wrangler.production.toml
+```
+
+A bare `wrangler deploy` here uses `wrangler.toml` instead — which would drop the
+custom domain and provision an *empty* namespace, orphaning every live share. The
+split exists so the repo can stay one-click deployable for everyone else; the
+`-c` flag is the price.
+
 ## Origin
 
 Built for brand-studio, which needed to put a round of generated logo candidates
