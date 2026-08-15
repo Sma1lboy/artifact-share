@@ -55,16 +55,68 @@ an idle one dies after a day. Republish the same content — same id — to revi
 
 ## Self-host
 
+**[Fork this repo](https://github.com/Sma1lboy/artifact-share/fork) first**, then
+deploy your fork — that way your hostname, TTL, and any board tweaks travel with
+you, and you can pull upstream fixes later.
+
 ```bash
-git clone https://github.com/Sma1lboy/artifact-share
+git clone https://github.com/<you>/artifact-share
 cd artifact-share
 bunx wrangler kv namespace create SHARES   # paste the id into wrangler.toml
 bunx wrangler deploy
 ```
 
-Point `routes` at your own hostname, or drop the block and use the
-`*.workers.dev` subdomain. The landing page lives in `site/` and is served by the
-same Worker (`[assets]` + `run_worker_first`, so `/share` and `/s/*` stay dynamic).
+That's the whole deploy. It fits inside the Cloudflare free tier (100k Worker
+requests/day, 1k KV writes/day) and there is no container, no always-on process,
+and no database to operate.
+
+Point `routes` at your own hostname, or delete the `routes` block entirely and use
+the `*.workers.dev` subdomain you get for free. The landing page lives in `site/`
+and is served by the same Worker (`[assets]` + `run_worker_first`, so `/share` and
+`/s/*` stay dynamic).
+
+### Hand this to your agent
+
+Fork the repo, then paste the block below into Claude Code / Codex / Cursor from
+the clone. It covers the whole setup including the parts that are easy to miss
+(the KV id has to be pasted back into `wrangler.toml`, and the custom domain must
+already be a zone on your Cloudflare account).
+
+``````text
+Deploy this artifact-share fork to my own Cloudflare account.
+
+Steps:
+1. Check `bunx wrangler whoami`. If not logged in, run `bunx wrangler login`
+   and wait for me to finish the browser flow.
+2. Create the KV namespace: `bunx wrangler kv namespace create SHARES`.
+   Take the `id` it prints and write it into `wrangler.toml` under
+   `[[kv_namespaces]]` — replacing the existing id, which is mine, not yours.
+3. In `wrangler.toml`, set `name` to something unique to me, and either:
+   - point `routes` at a hostname whose zone is already on my Cloudflare
+     account, or
+   - delete the `routes` block entirely to use the free `*.workers.dev` subdomain.
+   Ask me which, and tell me the resulting URL either way.
+4. Run `bunx wrangler deploy --dry-run` first and show me the bindings it
+   reports. Only if both SHARES and ASSETS are bound, run `bunx wrangler deploy`.
+5. Smoke-test the deployed URL end to end and show me the output:
+   - `GET /` returns the landing page (200, text/html)
+   - `POST /share` with a small HTML body returns `{id, url}`
+   - `GET /share/<id>` returns that HTML
+   - `POST /share/<id>/verdict` with `{"name":"test","decisions":[]}` returns ok
+   - `GET /share/<id>/verdicts` shows the submission
+6. Do NOT commit the KV id if this fork is public and I say I want it private —
+   ask before committing `wrangler.toml`.
+
+Constraints: don't add dependencies, don't restructure the worker, don't change
+the TTL unless I ask. If a step fails, stop and show me the actual error rather
+than working around it.
+``````
+
+> **Not Railway/Vercel/Fly.** This runs on the Cloudflare Workers runtime and
+> stores state in Workers KV — there's no Node server to boot and no `env.SHARES`
+> outside Cloudflare. Porting it to a container host means replacing the storage
+> layer (Redis or Postgres) and rewriting the entrypoint as an HTTP server. Doable,
+> but that's a fork with a different shape, not a config change.
 
 ## Board template
 

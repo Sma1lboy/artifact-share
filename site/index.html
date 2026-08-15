@@ -253,14 +253,22 @@ $ curl <span class="p">https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
   <h2>Run your own</h2>
   <p class="sub">One Worker, one KV namespace. It fits in the Cloudflare free tier and there is nothing else to operate.</p>
   <div class="term">
-$ git clone https://github.com/Sma1lboy/artifact-share
+<span class="c"># fork it first, so your hostname and tweaks travel with you</span>
+$ git clone https://github.com/&lt;you&gt;/artifact-share
 $ cd artifact-share
 $ bunx wrangler kv namespace create SHARES   <span class="c"># paste the id into wrangler.toml</span>
 $ bunx wrangler deploy</div>
   <p style="margin-top:20px;color:var(--muted);font-size:14px;max-width:64ch">
-    Point <code>routes</code> at your own hostname, or drop the block entirely and use the
+    Point <code>routes</code> at your own hostname, or drop the block entirely and use the free
     <code>*.workers.dev</code> subdomain. The landing page you're reading is served from
-    <code>site/</code> by the same Worker.
+    <code>site/</code> by the same Worker. There's a
+    <a href="https://github.com/Sma1lboy/artifact-share#hand-this-to-your-agent" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-2)">copy-paste prompt in the README</a>
+    if you'd rather hand the whole setup to your coding agent.
+  </p>
+  <p style="margin-top:14px;color:var(--faint);font-size:13.5px;max-width:64ch">
+    Runs on the Workers runtime with state in KV — there is no Node process to host,
+    so this is not a Railway/Fly/Vercel deploy. Porting it to a container means
+    swapping KV for Redis or Postgres.
   </p>
 </section>
 
