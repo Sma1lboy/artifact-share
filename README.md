@@ -4,7 +4,7 @@
 
 # artifact-share
 
-**Publish an HTML page. Get the verdicts back.**
+**A `curl` away from a public link for any HTML you have.**
 
 [share.sma1lboy.me](https://share.sma1lboy.me) · Cloudflare Worker + KV · ~200 lines
 
@@ -12,48 +12,98 @@
 
 </div>
 
-An agent builds a self-contained HTML page — a review board, a diff, a report —
-and `POST`s it. Out comes a public link anyone can open. They decide in the
-browser; the agent reads those decisions back as JSON.
-
-No account, no build step, no dashboard. Links expire after a day idle.
+You have an HTML file — a report your agent generated, a diff, a chart, a mockup.
+You want someone else to look at it. Everything else is heavy: commit it to a repo
+and wait for a deploy, paste it into a gist that renders as source, spin up a
+bucket, or screenshot it into a chat and lose the interactivity.
 
 ```bash
-# publish
-curl -X POST https://share.sma1lboy.me/share --data-binary @board.html
+curl -X POST https://share.sma1lboy.me/share --data-binary @report.html
 # {"id":"a3f10c88b2e94d71","url":"https://share.sma1lboy.me/share/a3f10c88b2e94d71"}
-
-# …reviewers open it, click, submit…
-
-# collect
-curl https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
-# {"id":"…","count":2,"submissions":[{"name":"jackson","decisions":[…]}]}
 ```
 
-## API
+That's it. Send the URL. Whoever opens it sees the page, JavaScript and all. No
+account on either end, no build step, nothing to install.
+
+Links expire after a day idle, which is the point — this is a transit desk, not
+a host.
+
+## The core: two endpoints
 
 | Method + path | Purpose |
 | --- | --- |
-| `POST /share[?series=&round=&title=&by=]` (body = self-contained HTML, ≤4MB) | Publish a page → `{id, url}`. Content-derived id, so republishing is idempotent. `series`/`round`/`title` file it under a stable slug; `by` is the publisher's name, shown in the injected topbar. |
-| `GET /share/<id>` | Serve the page, re-arm its TTL. `410` when expired. With `?series=` a thin topbar (round history, share button) is prepended — stored HTML is never rewritten. |
-| `POST /share/<id>/verdict` (`{name, decisions[], next?}`) | One reviewer's submission; keyed by name, so resubmitting overwrites. |
-| `GET /share/<id>/verdicts` | Every submission merged: `{id, count, submissions[]}`. This is what an agent polls. |
-| `GET /s/<slug>` | One stable URL per series — 302s to the newest round. `/s/<slug>/index.json` lists the history. |
+| `POST /share` (body = self-contained HTML, ≤4MB) | Publish → `{id, url}`. The id is a hash of the content, so re-POSTing the same page returns the same link. |
+| `GET /share/<id>` | Serve it back, re-arming the TTL. `410` once it has lapsed. |
+
+Everything below is optional and layered on top.
+
+## Series: one stable URL across revisions
+
+If you're publishing revisions of the same thing, a fresh link each time means
+whoever you sent v1 to is still looking at v1.
+
+```bash
+curl -X POST "https://share.sma1lboy.me/share?series=q3-report&round=2&title=after+feedback" \
+     --data-binary @report.html
+```
+
+| Method + path | Purpose |
+| --- | --- |
+| `GET /s/<slug>` | 302s to the newest round. A link you sent last week lands on today's page. |
+| `GET /s/<slug>/index.json` | The round history, as JSON. |
+
+Serving a page with `?series=` prepends a thin topbar (revision dropdown, share
+button). Your stored HTML is never rewritten — the chrome is added at read time.
+
+`?by=<name>` puts a byline in that topbar.
+
+## Verdicts: collect decisions on the page
+
+**Optional.** ~25 of the worker's ~200 lines. Skip this section entirely if you
+just want to share a page.
+
+If the page you publish is something people need to *decide* on — approve/reject,
+keep/kill, pick one of N — you can collect those decisions instead of chasing
+replies:
+
+| Method + path | Purpose |
+| --- | --- |
+| `POST /share/<id>/verdict` (`{name, decisions[], next?}`) | One person's submission; keyed by name, so resubmitting overwrites rather than duplicates. |
+| `GET /share/<id>/verdicts` | Everything merged: `{id, count, submissions[]}`. Poll this. |
+
+The server does not care what's in `decisions[]` — it stores and returns the
+array as-is. Wire the two fetches into your page and the shape is yours:
+
+```js
+fetch(location.pathname + "/verdict", {           // submit
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name, decisions, next }),
+})
+fetch(location.pathname + "/verdicts")            // aggregate
+```
+
+[brand-studio](https://github.com/Sma1lboy/brand-studio) is the reason this layer
+exists: it publishes rounds of generated brand candidates and reads keep/kill
+decisions back. It ships a ready-made board wired to exactly these two calls.
 
 ## Lifetime
 
-Every key is written with `expirationTtl = 86400`. Any hit (page view, verdict
-submit) re-arms both the page and its verdicts, so an active review lives on and
-an idle one dies after a day. Republish the same content — same id — to revive it.
+Every key is written with `expirationTtl = 86400`. Any hit — page view or verdict
+submit — re-arms it, so the clock measures **idle**, not age: an active link never
+expires under you, an abandoned one disappears. Republish the same content (same
+id) to revive a dead link.
 
 ## Constraints, on purpose
 
 - **No auth.** Ids are unguessable 64-bit content hashes; treat a link as a
-  capability token. Combined with the short TTL, there is nothing worth stealing.
+  capability token, the way you'd treat a doc link. Combined with the short TTL,
+  there is nothing worth stealing.
 - **No renderer.** The server stores bytes and hands them back. Pages must be
   self-contained: inline CSS, inline SVG, data-URI images.
-- **No dashboard.** The agent that published a link is what reads it back. A
-  series slug is the only index that exists.
+- **No dashboard.** There's nowhere to log in and browse what you've published.
+  Whatever published a link is what reads it back; a series slug is the only
+  index that exists.
 
 ## Deploy your own
 
@@ -155,23 +205,6 @@ of working around it.
 > undefined. Porting means rewriting the entrypoint as an HTTP server and replacing
 > KV with Redis or Postgres — including its TTL semantics and prefix scans. That's a
 > different project, not a config change.
-
-## Board template
-
-Any self-contained HTML works. A page becomes *interactive* by wiring two fetches:
-
-```js
-fetch(location.pathname + "/verdict", {           // submit
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ name, decisions, next }),
-})
-fetch(location.pathname + "/verdicts")            // aggregate
-```
-
-[brand-studio](https://github.com/Sma1lboy/brand-studio) ships a ready-made
-round-review board wired to exactly this transport, and consumes this repo as a
-submodule.
 
 ## Maintainer note
 

@@ -8,17 +8,14 @@
   </g>
   <text x="176" y="126" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="27" fill="#22262B" font-weight="600">artifact-share</text>
 
-  <text x="84" y="278" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="72" font-weight="600" fill="#22262B" letter-spacing="-1.6">Publish an HTML page.</text>
-  <text x="84" y="368" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="72" font-weight="600" fill="#22262B" letter-spacing="-1.6">Get the <tspan fill="#C97A16">verdicts</tspan> back.</text>
+  <text x="84" y="278" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="70" font-weight="600" fill="#22262B" letter-spacing="-1.6">One <tspan fill="#C97A16">curl</tspan> from an HTML file</text>
+  <text x="84" y="366" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="70" font-weight="600" fill="#22262B" letter-spacing="-1.6">to a link you can send.</text>
 
-  <text x="84" y="440" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="27" fill="#5C646E">Reviewers decide in the browser. Your agent reads the JSON.</text>
+  <text x="84" y="438" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="27" fill="#5C646E">No account, no build step, nothing to install.</text>
 
   <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="23">
-    <rect x="84" y="492" width="330" height="52" rx="10" fill="#FFFFFF" stroke="#DDE1E6"/>
-    <text x="106" y="525" fill="#22262B">POST /share</text>
-    <text x="436" y="525" fill="#9AA2AC">→</text>
-    <rect x="470" y="492" width="450" height="52" rx="10" fill="#FFFFFF" stroke="#DDE1E6"/>
-    <text x="492" y="525" fill="#22262B">GET /share/&lt;id&gt;/verdicts</text>
+    <rect x="84" y="492" width="620" height="52" rx="10" fill="#FFFFFF" stroke="#DDE1E6"/>
+    <text x="106" y="525" fill="#22262B">curl -X POST …/share --data-binary @page.html</text>
   </g>
 
   <text x="84" y="592" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="19" fill="#9AA2AC">share.sma1lboy.me · Cloudflare Worker + KV · MIT</text>

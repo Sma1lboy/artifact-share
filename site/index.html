@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>artifact-share — publish an HTML board, read the verdicts back</title>
-<meta name="description" content="One POST turns a self-contained HTML page into a public review link. Reviewers submit decisions in the browser; your agent reads them back as JSON. No account, no build step, no dashboard — the link expires after a day idle.">
+<title>artifact-share — one curl from an HTML file to a shareable link</title>
+<meta name="description" content="POST a self-contained HTML file, get a public link anyone can open — JavaScript and all. No account, no build step, nothing to install. Optional layers add revision history and decision collection. Cloudflare Worker + KV, ~200 lines.">
 <link rel="canonical" href="https://share.sma1lboy.me/">
 <link rel="icon" href="/mark.svg" type="image/svg+xml">
-<meta property="og:title" content="artifact-share — publish an HTML board, read the verdicts back">
-<meta property="og:description" content="One POST turns a self-contained HTML page into a public review link. Reviewers decide in the browser; your agent reads the verdicts back as JSON.">
+<meta property="og:title" content="artifact-share — one curl from an HTML file to a shareable link">
+<meta property="og:description" content="POST a self-contained HTML file, get a public link anyone can open. No account, no build step, nothing to install.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://share.sma1lboy.me/">
 <meta property="og:image" content="https://share.sma1lboy.me/og.svg">
@@ -153,12 +153,12 @@ footer .sp{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(-
 
 <div class="hero">
   <div class="eyebrow">Cloudflare Worker + KV · ~200 lines</div>
-  <h1>Publish an HTML page. Get the <em>verdicts</em> back.</h1>
+  <h1>One <em>curl</em> from an HTML file to a link you can send.</h1>
   <p class="lede">
-    Your agent builds a self-contained page — a review board, a diff, a report — and
-    <code>POST</code>s it. Out comes a public link anyone can open. They decide in the
-    browser; the agent reads those decisions back as JSON. No account, no build step,
-    no dashboard to log into.
+    You have a page — a report your agent generated, a diff, a chart, a mockup — and
+    someone else needs to see it. Everything else is heavy: commit and wait for a
+    deploy, paste into a gist that renders as source, spin up a bucket, screenshot it
+    into chat and lose the interactivity. <code>POST</code> it here and send the URL.
   </p>
   <div class="cta">
     <a class="btn" href="#api">Read the API</a>
@@ -170,65 +170,80 @@ footer .sp{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(-
     <div class="step">
       <h3>1 · Publish</h3>
       <span class="wire">POST /share</span>
-      <p>Body is your HTML, up to 4 MB. The id is a hash of the content, so republishing the same page returns the same link.</p>
+      <p>Body is your HTML, up to 4&nbsp;MB. The id is a hash of the content, so re-POSTing the same page returns the same link.</p>
     </div>
     <div class="arrow">→</div>
     <div class="step">
-      <h3>2 · Review</h3>
+      <h3>2 · Send it</h3>
       <span class="wire">GET /share/&lt;id&gt;</span>
-      <p>Anyone with the link opens the page and submits their decisions. Drafts sit in their browser until they send.</p>
+      <p>Whoever opens the link sees the page, JavaScript and all. No account on either end, nothing to install.</p>
     </div>
     <div class="arrow">→</div>
     <div class="step">
-      <h3>3 · Collect</h3>
+      <h3 style="opacity:.75">3 · Optionally, collect</h3>
       <span class="wire">GET /share/&lt;id&gt;/verdicts</span>
-      <p>One JSON blob, merged across reviewers and keyed by name. The agent reads it directly — no copy-paste shuttle.</p>
+      <p>If the page is something people must <em>decide</em> on, it can take submissions and hand them back as one JSON blob.</p>
     </div>
   </div>
 </div>
 
 <section id="api">
-  <h2>Four endpoints</h2>
-  <p class="sub">That is the whole surface. Everything is public by design: unguessable ids, short lifetime, nothing worth stealing after a day.</p>
+  <h2>Two endpoints, then two optional layers</h2>
+  <p class="sub">Everything is public by design: unguessable content-hash ids, short lifetime, nothing worth stealing after a day.</p>
 
+  <h3 class="mini-h" style="margin-top:0">The core</h3>
   <div class="api">
     <div class="row">
-      <div class="sig"><b>POST</b> /share<br>?series=&amp;round=&amp;title=&amp;by=</div>
-      <div class="desc">Publish a page (body = HTML, ≤4 MB) → <code>{id, url}</code>. Content-derived id, so republishing is idempotent. Passing <code>series</code> files it under a stable slug.</div>
+      <div class="sig"><b>POST</b> /share</div>
+      <div class="desc">Publish a page (body = self-contained HTML, ≤4&nbsp;MB) → <code>{id, url}</code>. The id is a hash of the content, so re-POSTing the same page returns the same link.</div>
     </div>
     <div class="row">
       <div class="sig"><b>GET</b> /share/&lt;id&gt;</div>
-      <div class="desc">Serve the page and re-arm its expiry. <code>410</code> once it has lapsed. With <code>?series=</code> a thin topbar is prepended for round history — your HTML is never rewritten.</div>
+      <div class="desc">Serve it back and re-arm the expiry. <code>410</code> once it has lapsed.</div>
     </div>
+  </div>
+
+  <h3 class="mini-h">Series — one stable URL across revisions</h3>
+  <div class="api">
     <div class="row">
-      <div class="sig"><b>POST</b> /share/&lt;id&gt;/verdict</div>
-      <div class="desc">One reviewer's submission: <code>{name, decisions[], next?}</code>. Keyed by name, so resubmitting overwrites rather than duplicates.</div>
-    </div>
-    <div class="row">
-      <div class="sig"><b>GET</b> /share/&lt;id&gt;/verdicts</div>
-      <div class="desc">Every submission merged: <code>{id, count, submissions[]}</code>. This is the endpoint an agent polls.</div>
+      <div class="sig"><b>POST</b> /share<br>?series=&amp;round=&amp;title=&amp;by=</div>
+      <div class="desc">Files the page under a slug instead of standing alone. Serving it with <code>?series=</code> prepends a revision-history topbar; your stored HTML is never rewritten.</div>
     </div>
     <div class="row">
       <div class="sig"><b>GET</b> /s/&lt;slug&gt;</div>
-      <div class="desc">One stable URL per series — redirects to the newest round, so a link you shared last week still lands on today's page. <code>/s/&lt;slug&gt;/index.json</code> lists the history.</div>
+      <div class="desc">302s to the newest round — a link you sent last week still lands on today's page. <code>/s/&lt;slug&gt;/index.json</code> lists the history.</div>
+    </div>
+  </div>
+
+  <h3 class="mini-h">Verdicts — collect decisions <span style="color:var(--faint);font-weight:400">(optional, ~25 lines of the worker)</span></h3>
+  <div class="api">
+    <div class="row">
+      <div class="sig"><b>POST</b> /share/&lt;id&gt;/verdict</div>
+      <div class="desc">One person's submission: <code>{name, decisions[], next?}</code>. Keyed by name, so resubmitting overwrites. The server doesn't inspect <code>decisions[]</code> — the shape is yours.</div>
+    </div>
+    <div class="row">
+      <div class="sig"><b>GET</b> /share/&lt;id&gt;/verdicts</div>
+      <div class="desc">Everything merged: <code>{id, count, submissions[]}</code>. Poll this if the page is something people must decide on rather than just read.</div>
     </div>
   </div>
 </section>
 
 <section>
-  <h2>The whole round trip</h2>
-  <p class="sub">Two commands to ship a board and read what came back.</p>
+  <h2>What it looks like</h2>
+  <p class="sub">One command for the common case. The rest is there when you need it.</p>
   <div class="term">
-<span class="c"># publish — the link is the response</span>
-$ curl -X POST <span class="p">https://share.sma1lboy.me/share?series=logo&amp;round=3&amp;by=jackson</span> \
-    --data-binary @board.html
-<span class="s">{"id":"a3f10c88b2e94d71","url":"https://share.sma1lboy.me/share/a3f10c88b2e94d71?series=logo"}</span>
+<span class="c"># the whole thing — the link is the response</span>
+$ curl -X POST <span class="p">https://share.sma1lboy.me/share</span> --data-binary @report.html
+<span class="s">{"id":"a3f10c88b2e94d71","url":"https://share.sma1lboy.me/share/a3f10c88b2e94d71"}</span>
 
-<span class="c"># …reviewers open it, click, submit…</span>
+<span class="c"># revising it? file it under a series so the link you already sent keeps working</span>
+$ curl -X POST <span class="p">"…/share?series=q3-report&amp;round=2&amp;title=after+feedback"</span> \
+    --data-binary @report.html
+<span class="c"># → /s/q3-report always lands on the newest round</span>
 
-<span class="c"># collect — one blob, merged by reviewer</span>
-$ curl <span class="p">https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts</span>
-<span class="s">{"id":"a3f10c88b2e94d71","count":2,"submissions":[
+<span class="c"># and if the page collects decisions, read them back as one blob</span>
+$ curl <span class="p">…/share/a3f10c88b2e94d71/verdicts</span>
+<span class="s">{"count":2,"submissions":[
   {"name":"jackson","decisions":[{"item":"r3-01","verdict":"keep"}],"next":"tighten the counter"},
   {"name":"wei","decisions":[{"item":"r3-04","verdict":"kill"}]}]}</span></div>
 </section>
@@ -240,7 +255,7 @@ $ curl <span class="p">https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
     <div class="note">
       <span class="ttl-badge">expires in 24h idle</span>
       <h3>Nothing is permanent</h3>
-      <p>Every key carries a one-day TTL. Any hit re-arms it, so an active review lives on and an abandoned one disappears. Republish the same content to bring a dead link back.</p>
+      <p>Every key carries a one-day TTL. Any hit re-arms it, so a link people are still opening lives on and an abandoned one disappears. Republish the same content to bring a dead link back.</p>
     </div>
     <div class="note">
       <h3>No accounts</h3>
@@ -280,7 +295,7 @@ $ curl <span class="p">https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
     </div>
     <div class="row">
       <div class="sig"><b>Link lifetime</b><br>TTL in worker.js</div>
-      <div class="desc"><code>86400</code> — one day <em>idle</em>, not one day old. Any hit re-arms the clock, so an active review never expires under you.</div>
+      <div class="desc"><code>86400</code> — one day <em>idle</em>, not one day old. Any hit re-arms the clock, so a link people are still opening never expires under you.</div>
     </div>
     <div class="row">
       <div class="sig"><b>Max page size</b><br>worker.js</div>
@@ -307,11 +322,12 @@ $ bunx wrangler deploy   <span class="c"># KV is provisioned for you on first de
 <section>
   <h2>Where it came from</h2>
   <p class="sub" style="margin-bottom:0">
-    Built for <a href="https://brand-studio.sma1lboy.me" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-2)">brand-studio</a>,
-    which needed to put a round of generated logo candidates in front of several people and read
-    the keep/kill decisions back without anyone opening a tool. It turned out that nothing
-    about that is specific to brand assets — so it's its own thing now, and brand-studio
-    consumes it as a submodule.
+    <a href="https://brand-studio.sma1lboy.me" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-2)">brand-studio</a>
+    needed to put a round of generated logo candidates in front of several people and read the
+    keep/kill decisions back without anyone opening a tool. That's where the verdicts layer comes
+    from. But the part underneath it — take some HTML, give me a link — turned out to be the
+    useful bit on its own, and has nothing to do with brand assets. So it's its own thing now,
+    and brand-studio consumes it as a submodule.
   </p>
 </section>
 
