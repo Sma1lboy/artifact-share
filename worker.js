@@ -1,4 +1,4 @@
-// brand-studio share server — Cloudflare Worker + KV.
+// artifact-share — Cloudflare Worker + KV.
 // Shares a self-contained review-board HTML at /share/<id> and collects
 // per-reviewer verdicts the agent can read back directly (GET .../verdicts).
 // ponytail: no auth by design — org-internal links, content-hash ids, short TTL.
@@ -46,7 +46,14 @@ async function seriesUpsert(env, slug, entry) {
   return list
 }
 
-// Outer chrome injected above a board (claude.ai-artifact style): org glyph,
+// Two layered plates — a board and the round behind it. Transport chrome only:
+// the board's own identity lives inside the board HTML, which we never touch.
+const MARK =
+  `<a href="/" title="artifact-share" style="display:flex"><svg viewBox="0 0 120 120" width="22" height="22" aria-hidden="true">` +
+  `<rect x="44" y="16" width="60" height="60" rx="13" fill="none" stroke="#191713" stroke-width="9" opacity=".34"/>` +
+  `<rect x="16" y="44" width="60" height="60" rx="13" fill="#191713"/></svg></a>`
+
+// Outer chrome injected above a board (claude.ai-artifact style): mark,
 // round-history dropdown, share button. Pure prepend — board HTML untouched.
 function topbar(origin, slug, list, curId) {
   const cur = list.find((e) => e.id === curId) || {}
@@ -59,7 +66,7 @@ function topbar(origin, slug, list, curId) {
         `${e.id === curId ? "<em>Current</em>" : ""}<time>${(e.ts || "").slice(0, 10)}</time></a>`,
     )
     .join("")
-  const glyph = `<svg viewBox="0 0 120 120" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" fill="#191713" d="M60 12 L102 36 V84 L60 108 L18 84 V36 Z M42 68 L37 42 L52 53 H68 L83 42 L78 68 L60 90 Z"/></svg>`
+  const glyph = MARK
   return `<div id="bs-top">
 <style>
 #bs-top{position:fixed;top:0;left:0;right:0;height:48px;z-index:99;background:#FCF8F1;border-bottom:1px solid #E2D8C8;display:flex;align-items:center;gap:12px;padding:0 14px;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;color:#191713}
@@ -81,7 +88,7 @@ function topbar(origin, slug, list, curId) {
 ${glyph}
 <button class="bs-t" id="bs-tbtn">${slug} · round ${cur.round || "?"}${cur.title ? " · " + cur.title : ""}
 <svg class="bs-ch" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3 L5 7 L9 3" stroke="#191713" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
-<span class="bs-by">Board${cur.by ? " by " + cur.by : " · brand-studio"}</span>
+<span class="bs-by">Board${cur.by ? " by " + cur.by : ""}</span>
 <button class="bs-share" id="bs-shr">Share</button>
 <div id="bs-pop"><h4>Round history</h4>${items}</div>
 <script>
@@ -126,7 +133,7 @@ export default {
 
     const m = url.pathname.match(/^\/share(?:\/([0-9a-f]{16}))?(?:\/(verdicts?))?$/)
     if (!m) {
-      return new Response("brand-studio share server. POST /share -> {url}", {
+      return new Response("artifact-share. POST /share -> {url}. See / for docs.", {
         headers: { "Content-Type": "text/plain; charset=utf-8", ...CORS },
       })
     }

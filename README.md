@@ -1,33 +1,95 @@
-# brand-studio share server
+<div align="center">
 
-Multi-reviewer round boards at `https://brand-studio.sma1lboy.me/share/<id>`,
-so a review round can be shared as one public link and the agent can read the
-verdicts back directly — no artifact private-wall, no copy/paste shuttle.
+<img src="site/mark.svg" width="72" alt="">
 
-Cloudflare Worker + KV (`worker.js`, deployed via `bunx wrangler deploy` from
-this directory; uses the wrangler OAuth login, not `CLOUDFLARE_API_TOKEN`).
-Modeled on the mc-launcher share store: content-derived FNV-1a ids, idempotent
-republish. No auth by design — org-internal links, short TTL.
+# artifact-share
 
-## Lifetime
+**Publish an HTML page. Get the verdicts back.**
 
-Every key is written with `expirationTtl = 86400`. Any hit (board view, verdict
-submit) re-arms both the board and its verdicts, so an active review lives on;
-an idle share dies after one day. Republish (same content → same id) to revive.
+[share.sma1lboy.me](https://share.sma1lboy.me) · Cloudflare Worker + KV · ~200 lines
+
+</div>
+
+An agent builds a self-contained HTML page — a review board, a diff, a report —
+and `POST`s it. Out comes a public link anyone can open. They decide in the
+browser; the agent reads those decisions back as JSON.
+
+No account, no build step, no dashboard. Links expire after a day idle.
+
+```bash
+# publish
+curl -X POST https://share.sma1lboy.me/share --data-binary @board.html
+# {"id":"a3f10c88b2e94d71","url":"https://share.sma1lboy.me/share/a3f10c88b2e94d71"}
+
+# …reviewers open it, click, submit…
+
+# collect
+curl https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
+# {"id":"…","count":2,"submissions":[{"name":"jackson","decisions":[…]}]}
+```
 
 ## API
 
 | Method + path | Purpose |
 | --- | --- |
-| `POST /share[?series=&round=&title=&by=]` (body = self-contained HTML, ≤4MB) | Publish a board → `{id, url}`. Content-derived id, idempotent. `series/round/title` register it in a series — `/s/<slug>` 302s to the latest round's board (no picker page; history lives in the topbar dropdown, fed by `/s/<slug>/index.json`); `by` is the publisher's everyday name, shown in the injected topbar ("Board by jackson"). |
-| `GET /share/<id>` | Serve the board (re-arms TTL). `410` when expired. |
-| `POST /share/<id>/verdict` (`{name, decisions[], next?}`) | One reviewer's submission; keyed by name, resubmit overwrites. |
-| `GET /share/<id>/verdicts` | Merged submissions, agent-readable: `{id, count, submissions[]}`. |
+| `POST /share[?series=&round=&title=&by=]` (body = self-contained HTML, ≤4MB) | Publish a page → `{id, url}`. Content-derived id, so republishing is idempotent. `series`/`round`/`title` file it under a stable slug; `by` is the publisher's name, shown in the injected topbar. |
+| `GET /share/<id>` | Serve the page, re-arm its TTL. `410` when expired. With `?series=` a thin topbar (round history, share button) is prepended — stored HTML is never rewritten. |
+| `POST /share/<id>/verdict` (`{name, decisions[], next?}`) | One reviewer's submission; keyed by name, so resubmitting overwrites. |
+| `GET /share/<id>/verdicts` | Every submission merged: `{id, count, submissions[]}`. This is what an agent polls. |
+| `GET /s/<slug>` | One stable URL per series — 302s to the newest round. `/s/<slug>/index.json` lists the history. |
+
+## Lifetime
+
+Every key is written with `expirationTtl = 86400`. Any hit (page view, verdict
+submit) re-arms both the page and its verdicts, so an active review lives on and
+an idle one dies after a day. Republish the same content — same id — to revive it.
+
+## Constraints, on purpose
+
+- **No auth.** Ids are unguessable 64-bit content hashes; treat a link as a
+  capability token. Combined with the short TTL, there is nothing worth stealing.
+- **No renderer.** The server stores bytes and hands them back. Pages must be
+  self-contained: inline CSS, inline SVG, data-URI images.
+- **No dashboard.** The agent that published a link is what reads it back. A
+  series slug is the only index that exists.
+
+## Self-host
+
+```bash
+git clone https://github.com/Sma1lboy/artifact-share
+cd artifact-share
+bunx wrangler kv namespace create SHARES   # paste the id into wrangler.toml
+bunx wrangler deploy
+```
+
+Point `routes` at your own hostname, or drop the block and use the
+`*.workers.dev` subdomain. The landing page lives in `site/` and is served by the
+same Worker (`[assets]` + `run_worker_first`, so `/share` and `/s/*` stay dynamic).
 
 ## Board template
 
-`skills/brand-studio/assets/share-review.html` — the round-review board wired
-to this transport (submit → `POST <path>/verdict`, aggregate → `GET
-<path>/verdicts`, drafts in `localStorage`). Fill `__ITEMS_JSON__` (items with
-inline `svg` markup or data-URI `jpg`) and `__GOAL__`, then `POST /share` the
-result. The board must stay self-contained: inline SVGs / data-URI images only.
+Any self-contained HTML works. A page becomes *interactive* by wiring two fetches:
+
+```js
+fetch(location.pathname + "/verdict", {           // submit
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name, decisions, next }),
+})
+fetch(location.pathname + "/verdicts")            // aggregate
+```
+
+[brand-studio](https://github.com/Sma1lboy/brand-studio) ships a ready-made
+round-review board wired to exactly this transport, and consumes this repo as a
+submodule.
+
+## Origin
+
+Built for brand-studio, which needed to put a round of generated logo candidates
+in front of several people and read the keep/kill decisions back without anyone
+opening a tool. Nothing about that is specific to brand assets, so it lives on
+its own.
+
+## License
+
+MIT
