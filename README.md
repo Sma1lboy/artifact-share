@@ -8,6 +8,8 @@
 
 [share.sma1lboy.me](https://share.sma1lboy.me) · Cloudflare Worker + KV · ~200 lines
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Sma1lboy/artifact-share)
+
 </div>
 
 An agent builds a self-contained HTML page — a review board, a diff, a report —
@@ -53,34 +55,67 @@ an idle one dies after a day. Republish the same content — same id — to revi
 - **No dashboard.** The agent that published a link is what reads it back. A
   series slug is the only index that exists.
 
-## Self-host
+## Deploy your own
 
-**[Fork this repo](https://github.com/Sma1lboy/artifact-share/fork) first**, then
-deploy your fork — that way your hostname, TTL, and any board tweaks travel with
-you, and you can pull upstream fixes later.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Sma1lboy/artifact-share)
+
+**Click the button.** Cloudflare forks this repo into your GitHub account, creates
+the KV namespace, wires the binding, and deploys — you get a working
+`https://artifact-share.<your-subdomain>.workers.dev` at the end. There is nothing
+to paste and no config to edit.
+
+Free tier covers it: 100k Worker requests/day, 1k KV writes/day. No container, no
+always-on process, no database bill.
+
+<details>
+<summary><b>Prefer the CLI?</b></summary>
 
 ```bash
-git clone https://github.com/<you>/artifact-share
+git clone https://github.com/<you>/artifact-share   # fork first
 cd artifact-share
-bunx wrangler kv namespace create SHARES   # paste the id into wrangler.toml
 bunx wrangler deploy
 ```
 
-That's the whole deploy. It fits inside the Cloudflare free tier (100k Worker
-requests/day, 1k KV writes/day) and there is no container, no always-on process,
-and no database to operate.
+`wrangler.toml` declares `SHARES` **without an id on purpose** — Wrangler
+provisions a fresh namespace on first deploy and writes the id back for you. Don't
+paste anyone else's id in.
 
-Point `routes` at your own hostname, or delete the `routes` block entirely and use
-the `*.workers.dev` subdomain you get for free. The landing page lives in `site/`
-and is served by the same Worker (`[assets]` + `run_worker_first`, so `/share` and
-`/s/*` stay dynamic).
+</details>
 
-### Hand this to your agent
+### The three settings
 
-Fork the repo, then paste the block below into Claude Code / Codex / Cursor from
-the clone. It covers the whole setup including the parts that are easy to miss
-(the KV id has to be pasted back into `wrangler.toml`, and the custom domain must
-already be a zone on your Cloudflare account).
+Everything else is defaults. These are the only knobs, and you can ignore all
+three to start.
+
+| Setting | Where | Default |
+| --- | --- | --- |
+| **Custom domain** | `routes` in `wrangler.toml` (commented out) | free `*.workers.dev` URL |
+| **Link lifetime** | `TTL` at the top of `worker.js` | `86400` — 1 day idle |
+| **Max page size** | the `4_000_000` check in `worker.js` | 4 MB |
+
+**Custom domain.** Uncomment the `routes` block and put your hostname in. The zone
+has to already be on your Cloudflare account — a domain you own but haven't added
+to Cloudflare won't work.
+
+```toml
+routes = [
+  { pattern = "share.example.com", custom_domain = true },
+]
+```
+
+**Link lifetime.** Every key is written with `expirationTtl = TTL` and any hit
+re-arms it, so the clock measures *idle*, not age. Raise it if reviews in your team
+sit for a week; lower it if you want links to die faster.
+
+**Max page size.** Boards with a lot of inlined data-URI images get big. KV's hard
+ceiling is 25 MB per value, so you have room to raise this — but a board that large
+is slow to open, and slicing the round in two is usually the better fix.
+
+<details>
+<summary><b>Hand the whole thing to your agent instead</b></summary>
+
+If you'd rather not click through the Cloudflare UI, paste this into Claude Code /
+Codex / Cursor from your clone:
 
 ``````text
 Deploy this artifact-share fork to my own Cloudflare account.
@@ -88,35 +123,38 @@ Deploy this artifact-share fork to my own Cloudflare account.
 Steps:
 1. Check `bunx wrangler whoami`. If not logged in, run `bunx wrangler login`
    and wait for me to finish the browser flow.
-2. Create the KV namespace: `bunx wrangler kv namespace create SHARES`.
-   Take the `id` it prints and write it into `wrangler.toml` under
-   `[[kv_namespaces]]` — replacing the existing id, which is mine, not yours.
-3. In `wrangler.toml`, set `name` to something unique to me, and either:
-   - point `routes` at a hostname whose zone is already on my Cloudflare
-     account, or
-   - delete the `routes` block entirely to use the free `*.workers.dev` subdomain.
-   Ask me which, and tell me the resulting URL either way.
-4. Run `bunx wrangler deploy --dry-run` first and show me the bindings it
-   reports. Only if both SHARES and ASSETS are bound, run `bunx wrangler deploy`.
-5. Smoke-test the deployed URL end to end and show me the output:
+2. In `wrangler.toml`, set `name` to something unique to me. Leave the
+   `[[kv_namespaces]]` block WITHOUT an id — Wrangler provisions a fresh
+   namespace on first deploy and writes the id back. Do not paste in an id.
+3. Ask me whether I want a custom domain:
+   - yes → uncomment `routes` and use my hostname; tell me the zone must
+     already be on my Cloudflare account
+   - no  → leave it commented; I get a free *.workers.dev URL
+4. Run `bunx wrangler deploy --dry-run` and show me the bindings. Only if both
+   SHARES and ASSETS are bound, run `bunx wrangler deploy`. Tell me the URL.
+5. Smoke-test the deployed URL end to end and show me the actual output:
    - `GET /` returns the landing page (200, text/html)
-   - `POST /share` with a small HTML body returns `{id, url}`
-   - `GET /share/<id>` returns that HTML
-   - `POST /share/<id>/verdict` with `{"name":"test","decisions":[]}` returns ok
-   - `GET /share/<id>/verdicts` shows the submission
-6. Do NOT commit the KV id if this fork is public and I say I want it private —
-   ask before committing `wrangler.toml`.
+   - `POST /share` with a small HTML body returns {id, url}
+   - `GET /share/<id>` returns that HTML back
+   - `POST /share/<id>/verdict` with {"name":"test","decisions":[]} returns ok
+   - `GET /share/<id>/verdicts` shows that submission
+6. If `wrangler.toml` now has a KV id in it, ask me before committing —
+   it's harmless to publish, but it's my namespace.
 
 Constraints: don't add dependencies, don't restructure the worker, don't change
-the TTL unless I ask. If a step fails, stop and show me the actual error rather
-than working around it.
+the TTL unless I ask. If a step fails, stop and show me the real error instead
+of working around it.
 ``````
 
-> **Not Railway/Vercel/Fly.** This runs on the Cloudflare Workers runtime and
-> stores state in Workers KV — there's no Node server to boot and no `env.SHARES`
-> outside Cloudflare. Porting it to a container host means replacing the storage
-> layer (Redis or Postgres) and rewriting the entrypoint as an HTTP server. Doable,
-> but that's a fork with a different shape, not a config change.
+</details>
+
+> **Cloudflare only — not Railway/Vercel/Fly.** The entrypoint is
+> `export default { fetch }` (the Workers runtime contract, not a Node server that
+> listens on a port), and all state lives in `env.SHARES`, a Workers KV binding the
+> platform injects. On a container host there is nothing to boot and that binding is
+> undefined. Porting means rewriting the entrypoint as an HTTP server and replacing
+> KV with Redis or Postgres — including its TTL semantics and prefix scans. That's a
+> different project, not a config change.
 
 ## Board template
 

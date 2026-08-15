@@ -1,0 +1,19 @@
+# The share.sma1lboy.me deployment. Everyone else should use wrangler.toml,
+# which provisions a fresh KV namespace instead of pointing at this one.
+#   bunx wrangler deploy -c wrangler.production.toml
+name = "artifact-share"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+routes = [
+  { pattern = "share.sma1lboy.me", custom_domain = true },
+]
+
+[assets]
+directory = "./site"
+binding = "ASSETS"
+run_worker_first = ["/share", "/share/*", "/s/*"]
+
+[[kv_namespaces]]
+binding = "SHARES"
+id = "966ff12b8c5b4685b1b4742298c806e2"

@@ -2,10 +2,6 @@ name = "artifact-share"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
-routes = [
-  { pattern = "share.sma1lboy.me", custom_domain = true },
-]
-
 # The landing page. The worker owns /share and /s/*; everything else
 # (i.e. "/") falls through to these static files.
 [assets]
@@ -13,6 +9,15 @@ directory = "./site"
 binding = "ASSETS"
 run_worker_first = ["/share", "/share/*", "/s/*"]
 
+# No `id` on purpose — Cloudflare provisions a fresh KV namespace for you on
+# first deploy (both via the Deploy button and `wrangler deploy`) and writes the
+# id back here. Don't paste someone else's id in.
 [[kv_namespaces]]
 binding = "SHARES"
-id = "966ff12b8c5b4685b1b4742298c806e2"
+
+# Custom domain? Uncomment and use your own hostname — the zone has to already
+# be on your Cloudflare account. Leave it commented to get a free
+# <worker>.<subdomain>.workers.dev URL.
+# routes = [
+#   { pattern = "share.example.com", custom_domain = true },
+# ]

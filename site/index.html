@@ -104,6 +104,13 @@ h2{font-size:clamp(21px,3vw,27px);letter-spacing:-.015em;color:var(--ink);font-w
 @media (max-width:700px){.row{grid-template-columns:1fr}.row .sig{border-right:none;border-bottom:1px solid var(--line)}}
 
 /* ---- terminal ---- */
+/* deploy button — the amber is the CTA here, not a TTL signal; it's the one
+   place the two readings don't collide because nothing else on the page is orange */
+.deploy-btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;font-weight:600;padding:13px 22px;border-radius:10px;text-decoration:none;color:var(--paper);background:var(--ttl);border:1px solid var(--ttl);transition:transform .12s,filter .12s}
+.deploy-btn:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.mini-h{font-size:16px;color:var(--ink);font-weight:600;margin:38px 0 8px;letter-spacing:-.01em}
+.row .sig b{font-weight:600;color:var(--ttl)}
+
 .term{background:var(--slab);border-radius:12px;padding:20px 22px;font-family:var(--mono);font-size:13px;line-height:1.85;color:var(--slab-ink);overflow-x:auto;border:1px solid var(--slab-2);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 .term .c{color:oklch(60% 0.012 250)}
 .term .p{color:var(--ttl)}
@@ -137,7 +144,7 @@ footer .sp{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(-
   </a>
   <nav>
     <a href="#api">API</a>
-    <a href="#deploy">Self-host</a>
+    <a href="#deploy">Deploy</a>
     <a href="https://github.com/Sma1lboy/artifact-share">GitHub</a>
   </nav>
 </div></header>
@@ -155,6 +162,7 @@ footer .sp{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(-
   </p>
   <div class="cta">
     <a class="btn" href="#api">Read the API</a>
+    <a class="btn ghost" href="#deploy">Deploy your own</a>
     <a class="btn ghost" href="https://github.com/Sma1lboy/artifact-share">Source on GitHub</a>
   </div>
 
@@ -251,24 +259,48 @@ $ curl <span class="p">https://share.sma1lboy.me/share/a3f10c88b2e94d71/verdicts
 
 <section id="deploy">
   <h2>Run your own</h2>
-  <p class="sub">One Worker, one KV namespace. It fits in the Cloudflare free tier and there is nothing else to operate.</p>
+  <p class="sub">Click the button. Cloudflare forks the repo, creates the KV namespace, wires the binding, and deploys — nothing to paste, no config to edit.</p>
+
+  <a class="deploy-btn" href="https://deploy.workers.cloudflare.com/?url=https://github.com/Sma1lboy/artifact-share">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M19.4 13.1a4.2 4.2 0 0 0-8-1.6 2.6 2.6 0 0 0-4 2.5 3 3 0 0 0 .3 6h11.3a3.5 3.5 0 0 0 .4-6.9z"/></svg>
+    Deploy to Cloudflare
+  </a>
+  <p style="margin-top:14px;color:var(--faint);font-size:13.5px">
+    Free tier covers it: 100k requests/day, 1k KV writes/day. No container, no always-on process.
+  </p>
+
+  <h3 class="mini-h">The three settings</h3>
+  <p style="color:var(--muted);font-size:14px;max-width:60ch;margin-bottom:16px">
+    Everything else is defaults, and you can ignore all three to start.
+  </p>
+  <div class="api" style="margin-bottom:22px">
+    <div class="row">
+      <div class="sig"><b>Custom domain</b><br>routes in wrangler.toml</div>
+      <div class="desc">Commented out by default — you get a free <code>*.workers.dev</code> URL. Uncomment it for your own hostname; the zone must already be on your Cloudflare account.</div>
+    </div>
+    <div class="row">
+      <div class="sig"><b>Link lifetime</b><br>TTL in worker.js</div>
+      <div class="desc"><code>86400</code> — one day <em>idle</em>, not one day old. Any hit re-arms the clock, so an active review never expires under you.</div>
+    </div>
+    <div class="row">
+      <div class="sig"><b>Max page size</b><br>worker.js</div>
+      <div class="desc">4 MB. KV's ceiling is 25 MB so there's headroom, but a board that big is slow to open — splitting the round usually beats raising it.</div>
+    </div>
+  </div>
+
   <div class="term">
-<span class="c"># fork it first, so your hostname and tweaks travel with you</span>
-$ git clone https://github.com/&lt;you&gt;/artifact-share
-$ cd artifact-share
-$ bunx wrangler kv namespace create SHARES   <span class="c"># paste the id into wrangler.toml</span>
-$ bunx wrangler deploy</div>
-  <p style="margin-top:20px;color:var(--muted);font-size:14px;max-width:64ch">
-    Point <code>routes</code> at your own hostname, or drop the block entirely and use the free
-    <code>*.workers.dev</code> subdomain. The landing page you're reading is served from
-    <code>site/</code> by the same Worker. There's a
-    <a href="https://github.com/Sma1lboy/artifact-share#hand-this-to-your-agent" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-2)">copy-paste prompt in the README</a>
-    if you'd rather hand the whole setup to your coding agent.
+<span class="c"># or from the CLI, after forking</span>
+$ git clone https://github.com/&lt;you&gt;/artifact-share &amp;&amp; cd artifact-share
+$ bunx wrangler deploy   <span class="c"># KV is provisioned for you on first deploy</span></div>
+  <p style="margin-top:16px;color:var(--muted);font-size:14px;max-width:64ch">
+    The landing page you're reading is served from <code>site/</code> by the same Worker. There's also a
+    <a href="https://github.com/Sma1lboy/artifact-share#deploy-your-own" style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-2)">copy-paste prompt in the README</a>
+    if you'd rather hand the setup to your coding agent.
   </p>
   <p style="margin-top:14px;color:var(--faint);font-size:13.5px;max-width:64ch">
-    Runs on the Workers runtime with state in KV — there is no Node process to host,
-    so this is not a Railway/Fly/Vercel deploy. Porting it to a container means
-    swapping KV for Redis or Postgres.
+    Cloudflare only. The entrypoint is <code>export default { fetch }</code> and state lives in a KV
+    binding the platform injects — on Railway/Fly/Vercel there's no process to boot and no
+    <code>env.SHARES</code>. Porting means swapping KV for Redis or Postgres.
   </p>
 </section>
 
