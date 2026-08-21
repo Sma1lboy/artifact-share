@@ -69,14 +69,29 @@ function topbar(origin, slug, list, curId) {
   const glyph = MARK
   return `<div id="bs-top">
 <style>
-#bs-top{position:fixed;top:0;left:0;right:0;height:48px;z-index:99;background:#FCF8F1;border-bottom:1px solid #E2D8C8;display:flex;align-items:center;gap:12px;padding:0 14px;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;color:#191713}
-#bs-top .bs-t{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:none;background:transparent;font:inherit;font-weight:700;cursor:pointer}
+/* NOTE: this block lives inside a template literal. Keep backticks and dollar-brace
+   interpolation out of these comments, or the literal closes early / interpolates and
+   the worker fails to build. Both mistakes were made writing this very comment.
+
+   color-scheme:light is load-bearing, not cosmetic. A <button> does not inherit
+   color — the UA supplies buttontext — and this chrome is injected above a page we
+   do not control. The moment that page declares support for dark, which is just a
+   <meta name="color-scheme" content="light dark">, a dark-mode browser resolves
+   buttontext to WHITE and the round title and the Share button vanish against this
+   cream. Measured, not guessed: both computed to rgb(255,255,255) here.
+   Pinning the scheme keeps every UA-supplied color (button text, scrollbars, focus
+   rings) in the same light world the rest of these hex values live in; the explicit
+   color:inherit on each button is the belt to that suspenders. */
+#bs-top{position:fixed;top:0;left:0;right:0;height:48px;z-index:99;color-scheme:light;background:#FCF8F1;border-bottom:1px solid #E2D8C8;display:flex;align-items:center;gap:12px;padding:0 14px;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;color:#191713}
+#bs-top .bs-t{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:none;background:transparent;font:inherit;color:inherit;font-weight:700;cursor:pointer}
 #bs-top .bs-t:hover{background:#F0E8DA}
 #bs-top .bs-t svg.bs-ch{opacity:.55}
 #bs-top .bs-by{color:#7A7166}
-#bs-top .bs-share{margin-left:auto;font:inherit;font-weight:600;padding:6px 16px;border-radius:8px;border:1px solid #191713;background:transparent;cursor:pointer}
+#bs-top .bs-share{margin-left:auto;font:inherit;color:inherit;font-weight:600;padding:6px 16px;border-radius:8px;border:1px solid #191713;background:transparent;cursor:pointer}
 #bs-top .bs-share:hover{background:#191713;color:#FCF8F1}
-#bs-pop{position:fixed;top:52px;left:14px;z-index:99;background:#fff;border:1px solid #E2D8C8;border-radius:12px;box-shadow:0 12px 32px rgba(25,23,19,.14);min-width:320px;padding:6px;display:none}
+/* #bs-pop nests inside #bs-top, so it already inherits that color — the pin here is
+   only so the popup survives being moved out of the topbar later. */
+#bs-pop{position:fixed;top:52px;left:14px;z-index:99;color-scheme:light;background:#fff;color:#191713;border:1px solid #E2D8C8;border-radius:12px;box-shadow:0 12px 32px rgba(25,23,19,.14);min-width:320px;padding:6px;display:none}
 #bs-pop h4{margin:6px 10px;font-size:12px;color:#7A7166;font-weight:600}
 #bs-pop .bs-it{display:flex;gap:8px;align-items:baseline;padding:9px 10px;border-radius:8px;color:inherit;text-decoration:none}
 #bs-pop .bs-it:hover{background:#F5EFE4}
