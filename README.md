@@ -105,6 +105,46 @@ id) to revive a dead link.
   Whatever published a link is what reads it back; a series slug is the only
   index that exists.
 
+## Both themes, because nothing here supplies one
+
+"No renderer" has a second half people discover late: the server never touches
+your colors, so a page that only designed one theme *is* a page that looks wrong
+to half the people you send it to. Whoever opens the link is on whatever their OS
+says, and that is the only signal in play.
+
+Define the palette as custom properties on `:root`, style components through those
+tokens, and redefine **only the tokens** in the dark block:
+
+```css
+:root{ --bg:#faf9f7; --ink:#16150f; --accent:#2f5fd0; }
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#131316; --ink:#eceae4; --accent:#7ea1f5; }
+}
+.card{ background:var(--bg); color:var(--ink); }   /* never restyled per theme */
+```
+
+Give the second theme the same care as the first — don't invert. An accent that
+carries on paper usually goes muddy on a dark ground and needs to lift, the way
+`#2f5fd0` becomes `#7ea1f5` above.
+
+A page may deliberately commit to a single visual world — a neon terminal, a
+letterpress invitation. That is a choice; shipping one theme because you forgot
+the other is not.
+
+Two things differ here from a claude.ai artifact, and copying that advice across
+gets both wrong:
+
+- **There is no CSP.** External font and script URLs work. They still cost a
+  round trip and fail silently offline, so a system stack or an inlined
+  `@font-face` data URI is the better default — but it is a performance call,
+  not a hard wall.
+- **There is no theme toggle.** `:root[data-theme="dark"]` has nothing on this
+  server to stamp it. `prefers-color-scheme` is the whole mechanism.
+
+The topbar injected above a `?series=` page keeps its own warm-paper palette in
+both themes, on purpose: it is chrome that identifies the board across rounds,
+and a topbar that changed with the page would stop reading as the same frame.
+
 ## Deploy your own
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Sma1lboy/artifact-share)
