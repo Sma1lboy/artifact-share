@@ -1,0 +1,91 @@
+name: deploy
+
+# Why this exists, given the worker is ~220 lines and deploying is one command:
+#
+#   1. The build gate. worker.js is one big template literal, so a stray backtick or a
+#      dollar-brace in a CSS comment closes it early and the worker does not compile.
+#      That has already happened twice, and neither time did a syntax check catch it —
+#      only actually building did. `deploy --dry-run` builds without shipping.
+#
+#   2. The -c flag. A bare `wrangler deploy` here picks up wrangler.toml, which
+#      provisions an EMPTY KV namespace and drops the custom domain — orphaning every
+#      live share. The README calls that out for humans; this file makes the machine
+#      the one that remembers.
+#
+#   3. Credentials that are not one laptop's shell. A hand deploy uses whatever token
+#      that machine happens to export, which is how the last one failed: the token in
+#      the shell was scoped Edit-zone-DNS and had no Workers permission at all.
+#
+# The secret is a Cloudflare API token scoped to Workers Scripts:Edit,
+# Workers KV Storage:Edit (account) and Workers Routes:Edit (zone sma1lboy.me).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Two pushes to main must not upload over each other; let the newer one win, but never
+# cancel a deploy that is already talking to Cloudflare.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (dry run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # The one thing that catches a broken template literal. Runs on PRs too, which is
+      # the whole point: the failure shows up before main is touched.
+      - name: build worker
+        run: npx --yes wrangler@4 deploy -c wrangler.production.toml --dry-run --outdir /tmp/build
+
+      # Building proves the literal is intact; it proves nothing about routing. The
+      # bug this test was written for — /s/<slug> 302'ing to a pinned /share/<id>, so
+      # every refresh showed the round you first opened — compiled perfectly.
+      - name: routes behave
+        run: node test-worker.mjs
+
+      # A deploy that silently used wrangler.toml would look identical in the log and
+      # orphan every live share, so assert the config actually in use names the real KV
+      # namespace and the custom domain before anything ships.
+      - name: production config is intact
+        run: |
+          set -euo pipefail
+          grep -q '966ff12b8c5b4685b1b4742298c806e2' wrangler.production.toml \
+            || { echo "::error::wrangler.production.toml no longer pins the live KV namespace"; exit 1; }
+          grep -q 'share.sma1lboy.me' wrangler.production.toml \
+            || { echo "::error::wrangler.production.toml no longer pins the custom domain"; exit 1; }
+          echo "KV namespace and custom domain both still pinned"
+
+  deploy:
+    name: deploy to share.sma1lboy.me
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4 deploy -c wrangler.production.toml
+
+      # Deploying is not the same as serving. Probe the live origin and fail loud if the
+      # thing that just shipped is not the thing answering.
+      - name: probe live
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 15 https://share.sma1lboy.me/ || true)
+            [ "$code" = "200" ] && break
+            echo "attempt $i: HTTP $code, retrying"; sleep 6
+          done
+          [ "$code" = "200" ] || { echo "::error::share.sma1lboy.me answered HTTP $code"; exit 1; }
+          echo "share.sma1lboy.me is serving (HTTP 200)"
