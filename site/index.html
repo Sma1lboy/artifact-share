@@ -207,11 +207,11 @@ footer .sp{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(-
   <div class="api">
     <div class="row">
       <div class="sig"><b>POST</b> /share<br>?series=&amp;round=&amp;title=&amp;by=</div>
-      <div class="desc">Files the page under a slug instead of standing alone. Serving it with <code>?series=</code> prepends a revision-history topbar; your stored HTML is never rewritten.</div>
+      <div class="desc">Files the page under a slug instead of standing alone and returns <code>/s/&lt;slug&gt;</code> as the link to send. Pages under a series get a round-history topbar at read time; your stored HTML is never rewritten.</div>
     </div>
     <div class="row">
       <div class="sig"><b>GET</b> /s/&lt;slug&gt;</div>
-      <div class="desc">302s to the newest round — a link you sent last week still lands on today's page. <code>/s/&lt;slug&gt;/index.json</code> lists the history.</div>
+      <div class="desc"><em>Serves</em> the newest round in place — no redirect, so the URL never changes and a refresh is always today's round. <code>/verdict</code>, <code>/verdicts</code> and <code>/index.json</code> hang off the same slug.</div>
     </div>
   </div>
 
@@ -239,7 +239,7 @@ $ curl -X POST <span class="p">https://share.sma1lboy.me/share</span> --data-bin
 <span class="c"># revising it? file it under a series so the link you already sent keeps working</span>
 $ curl -X POST <span class="p">"…/share?series=q3-report&amp;round=2&amp;title=after+feedback"</span> \
     --data-binary @report.html
-<span class="c"># → /s/q3-report always lands on the newest round</span>
+<span class="c"># → the link is /s/q3-report — same URL next round, refresh shows the newest</span>
 
 <span class="c"># and if the page collects decisions, read them back as one blob</span>
 $ curl <span class="p">…/share/a3f10c88b2e94d71/verdicts</span>

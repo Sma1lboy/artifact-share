@@ -47,13 +47,24 @@ curl -X POST "https://share.sma1lboy.me/share?series=q3-report&round=2&title=aft
      --data-binary @report.html
 ```
 
+The response `url` is now `/s/<slug>` — that is the link worth sending. The
+pinned single-round link is still there as `round` if you want it.
+
 | Method + path | Purpose |
 | --- | --- |
-| `GET /s/<slug>` | 302s to the newest round. A link you sent last week lands on today's page. |
+| `GET /s/<slug>` | **Serves** the newest round, in place. The URL never changes, so refresh, bookmark, and re-send all land on today's round. |
+| `GET /s/<slug>/verdict` · `/verdicts` | The same verdict endpoints, resolved to whichever round is newest. |
 | `GET /s/<slug>/index.json` | The round history, as JSON. |
 
-Serving a page with `?series=` prepends a thin topbar (revision dropdown, share
-button). Your stored HTML is never rewritten — the chrome is added at read time.
+It does not redirect, and that is the whole point: a 302 leaves a frozen
+`/share/<id>` in the address bar, so the second time someone opens the link they
+are looking at whatever was newest the *first* time.
+
+A page served under a series gets a thin topbar (round dropdown, share button)
+prepended at read time — your stored HTML is never rewritten. The topbar's
+**Live** chip means this URL re-resolves on every load; open an older round from
+the dropdown and it turns into **Pinned**, with one click back to the newest.
+Share always copies the `/s/<slug>` link, never the pinned one.
 
 `?by=<name>` puts a byline in that topbar.
 
@@ -104,6 +115,46 @@ id) to revive a dead link.
 - **No dashboard.** There's nowhere to log in and browse what you've published.
   Whatever published a link is what reads it back; a series slug is the only
   index that exists.
+
+## Both themes, because nothing here supplies one
+
+"No renderer" has a second half people discover late: the server never touches
+your colors, so a page that only designed one theme *is* a page that looks wrong
+to half the people you send it to. Whoever opens the link is on whatever their OS
+says, and that is the only signal in play.
+
+Define the palette as custom properties on `:root`, style components through those
+tokens, and redefine **only the tokens** in the dark block:
+
+```css
+:root{ --bg:#faf9f7; --ink:#16150f; --accent:#2f5fd0; }
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#131316; --ink:#eceae4; --accent:#7ea1f5; }
+}
+.card{ background:var(--bg); color:var(--ink); }   /* never restyled per theme */
+```
+
+Give the second theme the same care as the first — don't invert. An accent that
+carries on paper usually goes muddy on a dark ground and needs to lift, the way
+`#2f5fd0` becomes `#7ea1f5` above.
+
+A page may deliberately commit to a single visual world — a neon terminal, a
+letterpress invitation. That is a choice; shipping one theme because you forgot
+the other is not.
+
+Two things differ here from a claude.ai artifact, and copying that advice across
+gets both wrong:
+
+- **There is no CSP.** External font and script URLs work. They still cost a
+  round trip and fail silently offline, so a system stack or an inlined
+  `@font-face` data URI is the better default — but it is a performance call,
+  not a hard wall.
+- **There is no theme toggle.** `:root[data-theme="dark"]` has nothing on this
+  server to stamp it. `prefers-color-scheme` is the whole mechanism.
+
+The topbar injected above a `?series=` page keeps its own warm-paper palette in
+both themes, on purpose: it is chrome that identifies the board across rounds,
+and a topbar that changed with the page would stop reading as the same frame.
 
 ## Deploy your own
 
@@ -212,13 +263,25 @@ of working around it.
 KV namespace and the custom domain:
 
 ```bash
-bunx wrangler deploy -c wrangler.production.toml
+CLOUDFLARE_API_TOKEN=$CF_ARTIFACT_SHARE_TOKEN \
+  bunx wrangler deploy -c wrangler.production.toml
 ```
 
 A bare `wrangler deploy` here uses `wrangler.toml` instead — which would drop the
 custom domain and provision an *empty* namespace, orphaning every live share. The
 split exists so the repo can stay one-click deployable for everyone else; the
 `-c` flag is the price.
+
+The token override is the second half of that price. The ambient
+`CLOUDFLARE_API_TOKEN` on this machine is an *Edit-zone-DNS* token — it cannot
+touch a Worker, and the failure it produces (`Authentication error [code: 10000]`,
+plus complaints about missing `User Details:Read`) reads like a broken login
+rather than the wrong key. Deploying needs the Workers Scripts/KV/Routes token,
+kept as `CF_ARTIFACT_SHARE_TOKEN` and mirrored in Keychain:
+
+```bash
+security find-generic-password -a artifact-share -s cloudflare-deploy-token -w
+```
 
 ## Origin
 
