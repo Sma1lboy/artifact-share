@@ -47,13 +47,24 @@ curl -X POST "https://share.sma1lboy.me/share?series=q3-report&round=2&title=aft
      --data-binary @report.html
 ```
 
+The response `url` is now `/s/<slug>` — that is the link worth sending. The
+pinned single-round link is still there as `round` if you want it.
+
 | Method + path | Purpose |
 | --- | --- |
-| `GET /s/<slug>` | 302s to the newest round. A link you sent last week lands on today's page. |
+| `GET /s/<slug>` | **Serves** the newest round, in place. The URL never changes, so refresh, bookmark, and re-send all land on today's round. |
+| `GET /s/<slug>/verdict` · `/verdicts` | The same verdict endpoints, resolved to whichever round is newest. |
 | `GET /s/<slug>/index.json` | The round history, as JSON. |
 
-Serving a page with `?series=` prepends a thin topbar (revision dropdown, share
-button). Your stored HTML is never rewritten — the chrome is added at read time.
+It does not redirect, and that is the whole point: a 302 leaves a frozen
+`/share/<id>` in the address bar, so the second time someone opens the link they
+are looking at whatever was newest the *first* time.
+
+A page served under a series gets a thin topbar (round dropdown, share button)
+prepended at read time — your stored HTML is never rewritten. The topbar's
+**Live** chip means this URL re-resolves on every load; open an older round from
+the dropdown and it turns into **Pinned**, with one click back to the newest.
+Share always copies the `/s/<slug>` link, never the pinned one.
 
 `?by=<name>` puts a byline in that topbar.
 
@@ -252,13 +263,25 @@ of working around it.
 KV namespace and the custom domain:
 
 ```bash
-bunx wrangler deploy -c wrangler.production.toml
+CLOUDFLARE_API_TOKEN=$CF_ARTIFACT_SHARE_TOKEN \
+  bunx wrangler deploy -c wrangler.production.toml
 ```
 
 A bare `wrangler deploy` here uses `wrangler.toml` instead — which would drop the
 custom domain and provision an *empty* namespace, orphaning every live share. The
 split exists so the repo can stay one-click deployable for everyone else; the
 `-c` flag is the price.
+
+The token override is the second half of that price. The ambient
+`CLOUDFLARE_API_TOKEN` on this machine is an *Edit-zone-DNS* token — it cannot
+touch a Worker, and the failure it produces (`Authentication error [code: 10000]`,
+plus complaints about missing `User Details:Read`) reads like a broken login
+rather than the wrong key. Deploying needs the Workers Scripts/KV/Routes token,
+kept as `CF_ARTIFACT_SHARE_TOKEN` and mirrored in Keychain:
+
+```bash
+security find-generic-password -a artifact-share -s cloudflare-deploy-token -w
+```
 
 ## Origin
 
